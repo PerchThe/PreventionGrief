@@ -1,7 +1,7 @@
 name: GriefPrevention
 main: me.ryanhamshire.GriefPrevention.GriefPrevention
 softdepend:
-  [Multiverse-Core, My_Worlds, MystCraft, Transporter, RoyalCommands, MultiWorld, Denizen, CommandHelper, GPFlags]
+  [Multiverse-Core, My_Worlds, MystCraft, Transporter, RoyalCommands, MultiWorld, Denizen, CommandHelper, GPFlags, MyCommand, PlaceholderAPI]
 dev-url: https://dev.bukkit.org/projects/grief-prevention
 version: "${project.version}"
 api-version: "1.21"

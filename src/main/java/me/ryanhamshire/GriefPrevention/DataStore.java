@@ -132,8 +132,20 @@ public abstract class DataStore {
     void initialize() throws Exception {
         GriefPrevention.AddLogEntry(this.claims.size() + " total claims loaded.");
 
-        // RoboMWM: ensure the nextClaimID is greater than any other claim ID. If not,
-        // data corruption occurred (out of storage space, usually).
+        for (Claim claim : this.claims) {
+            this.claimIDMap.put(claim.id, claim);
+
+            this.addToChunkClaimMap(claim);
+
+            for (Claim child : claim.children) {
+                this.claimIDMap.put(child.id, child);
+
+                if (child.is3D()) {
+                    this.addToChunkClaimMap(child);
+                }
+            }
+        }
+        // --- END INSERT ---
         for (Claim claim : this.claims) {
             if (claim.id >= nextClaimID) {
                 Bukkit.getLogger().severe("nextClaimID was lesser or equal to an already-existing claim ID!\n" +

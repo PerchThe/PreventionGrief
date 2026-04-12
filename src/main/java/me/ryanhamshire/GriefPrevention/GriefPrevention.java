@@ -21,7 +21,6 @@ package me.ryanhamshire.GriefPrevention;
 import com.google.common.base.Predicate;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.griefprevention.commands.CommandAliasConfiguration;
 import com.griefprevention.commands.TabCompletions;
 import com.griefprevention.protection.ProtectionHelper;
 import me.ryanhamshire.GriefPrevention.DataStore.NoTransferException;
@@ -95,8 +94,6 @@ public class GriefPrevention extends JavaPlugin {
 
     // for logging to the console and log file
     private static Logger log;
-
-    private CommandAliasConfiguration commandAliases = CommandAliasConfiguration.empty();
 
     // this handles data storage, like player and region data
     public DataStore dataStore;
@@ -331,7 +328,6 @@ public class GriefPrevention extends JavaPlugin {
         log = instance.getLogger();
 
         this.loadConfig();
-        this.loadCommandAliases();
 
         this.customLogger = new CustomLogger();
 
@@ -456,105 +452,6 @@ public class GriefPrevention extends JavaPlugin {
         setUpCommands();
 
         AddLogEntry("Boot finished.");
-    }
-
-    private void loadCommandAliases() {
-        File folder = new File(DataStore.dataLayerFolderPath);
-        if (!folder.exists() && !folder.mkdirs()) {
-            log.warning("Could not create GriefPreventionData folder for alias configuration.");
-        }
-
-        File aliasFile = new File(folder, "alias.yml");
-
-        // Always get the latest default YAML
-        String defaultYaml = Alias.getDefaultYaml();
-
-        // If the file doesn't exist, create it with defaults
-        if (!aliasFile.exists()) {
-            try {
-                Files.writeString(aliasFile.toPath(), defaultYaml, StandardCharsets.UTF_8);
-                log.info("Created default alias.yml with built-in defaults.");
-            } catch (IOException e) {
-                log.log(Level.SEVERE, "Failed to create default alias.yml. Using built-in defaults only.", e);
-                this.commandAliases = CommandAliasConfiguration.empty();
-                return;
-            }
-        } else {
-            // File exists, update it with any new defaults while preserving user
-            // customizations
-            try {
-                // Load the current file content
-                String currentYaml = Files.readString(aliasFile.toPath(), StandardCharsets.UTF_8);
-
-                // If the file is empty or contains only whitespace, write the default content
-                if (currentYaml.trim().isEmpty()) {
-                    Files.writeString(aliasFile.toPath(), defaultYaml, StandardCharsets.UTF_8);
-                    log.info("Updated empty alias.yml with default configuration.");
-                }
-            } catch (IOException e) {
-                log.log(Level.WARNING, "Failed to check/update alias.yml. Will continue with current content.", e);
-            }
-        }
-
-        try {
-            // Load the configuration, which will merge user customizations with defaults
-            this.commandAliases = CommandAliasConfiguration.load(this, aliasFile);
-
-            // Check if we need to update the file with new default keys
-            YamlConfiguration defaultConfig = new YamlConfiguration();
-            defaultConfig.loadFromString(defaultYaml);
-
-            YamlConfiguration userConfig = YamlConfiguration.loadConfiguration(aliasFile);
-
-            // Only save if the user config is missing keys from the default
-            // We use the default YAML string directly to preserve formatting
-            boolean needsUpdate = false;
-            for (String key : defaultConfig.getKeys(true)) {
-                if (!userConfig.contains(key)) {
-                    needsUpdate = true;
-                    break;
-                }
-            }
-
-            if (needsUpdate) {
-                // Write the default YAML directly to preserve indentation
-                Files.writeString(aliasFile.toPath(), defaultYaml, StandardCharsets.UTF_8);
-                log.info("Updated alias.yml with latest default configuration while preserving customizations.");
-            }
-
-            AddLogEntry("Loaded command aliases from alias.yml");
-        } catch (Exception e) {
-            log.log(Level.SEVERE, "Failed to load alias.yml. Falling back to defaults.", e);
-            this.commandAliases = CommandAliasConfiguration.empty();
-        }
-    }
-
-    public @NotNull CommandAliasConfiguration getCommandAliases() {
-        return this.commandAliases;
-    }
-
-    public void reloadCommandAliases() {
-        GriefPrevention.AddLogEntry("Reloading command aliases...");
-        
-        // Capture commands before reload for comparison
-        java.util.Set<String> commandsBefore = com.griefprevention.commands.UnifiedCommandHandler.getRegisteredDynamicCommandsSnapshot();
-        
-        // Unregister old dynamic commands before re-registering
-        com.griefprevention.commands.UnifiedCommandHandler.unregisterAllDynamicCommands(this);
-        loadCommandAliases();
-        setUpCommands();
-        
-        // Capture commands after reload
-        java.util.Set<String> commandsAfter = com.griefprevention.commands.UnifiedCommandHandler.getRegisteredDynamicCommandsSnapshot();
-        
-        // Check if command registrations changed
-        boolean commandsChanged = !commandsBefore.equals(commandsAfter);
-        if (commandsChanged) {
-            GriefPrevention.AddLogEntry("Command registrations changed, refreshing command map for online players...");
-            refreshCommandMapForAllPlayers();
-        }
-        
-        GriefPrevention.AddLogEntry("Command aliases reloaded successfully.");
     }
     
     /**
@@ -1180,8 +1077,6 @@ public class GriefPrevention extends JavaPlugin {
     }
 
     private void setUpCommands() {
-        new com.griefprevention.commands.UnifiedClaimCommand(this);
-        new com.griefprevention.commands.UnifiedAdminClaimCommand(this);
 
         // Add tab completion for old trust commands
         TrustTabCompleter trustTabCompleter = new TrustTabCompleter();
@@ -2557,7 +2452,6 @@ public class GriefPrevention extends JavaPlugin {
         } else if (cmd.getName().equalsIgnoreCase("gpreload")) {
             this.loadConfig();
             this.dataStore.loadMessages();
-            this.reloadCommandAliases();
             playerEventHandler.reload();
             if (player != null) {
                 GriefPrevention.sendMessage(player, TextMode.Success,
