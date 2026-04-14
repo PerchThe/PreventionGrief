@@ -149,7 +149,7 @@ final class SnapOverrideHelper
             return SnapOverride.SELF;
         }
 
-        if (material == Material.CHAIN)
+        if (material == Material.IRON_CHAIN)
         {
             return SnapOverride.SELF;
         }

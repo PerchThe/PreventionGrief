@@ -26,6 +26,7 @@
  import me.ryanhamshire.GriefPrevention.events.ClaimInspectionEvent;
  import me.ryanhamshire.GriefPrevention.util.BoundingBox;
  import org.bukkit.event.entity.EntityMountEvent;
+ import org.bukkit.event.player.PlayerUnleashEntityEvent;
  import org.bukkit.BanList;
  import org.bukkit.Bukkit;
  import org.bukkit.ChatColor;
@@ -728,6 +729,8 @@ import me.ryanhamshire.GriefPrevention.util.SchedulerUtil;
                      }
                  }
              }
+
+
  
              //if logging-in account is banned, remember IP address for later
              if (instance.config_smartBan && event.getResult() == Result.KICK_BANNED)
@@ -739,6 +742,35 @@ import me.ryanhamshire.GriefPrevention.util.SchedulerUtil;
          //remember the player's ip address
          PlayerData playerData = this.dataStore.getPlayerData(player.getUniqueId());
          playerData.ipAddress = event.getAddress();
+     }
+
+     //when a player unleashes an entity...
+     @EventHandler(ignoreCancelled = true, priority = EventPriority.LOW)
+     public void onPlayerUnleashEntity(PlayerUnleashEntityEvent event)
+     {
+         Player player = event.getPlayer();
+         Entity entity = event.getEntity();
+
+         // If claims aren't enabled in this world, skip
+         if (!instance.claimsEnabledForWorld(entity.getWorld())) return;
+
+         // If preventing theft is enabled in the config
+         if (instance.config_claims_preventTheft)
+         {
+             PlayerData playerData = this.dataStore.getPlayerData(player.getUniqueId());
+             Claim claim = this.dataStore.getClaimAt(entity.getLocation(), false, playerData.lastClaim);
+
+             if (claim != null)
+             {
+                 // Check if the player has Inventory (Container/Animal) trust
+                 Supplier<String> failureReason = claim.checkPermission(player, ClaimPermission.Inventory, event);
+                 if (failureReason != null)
+                 {
+                     event.setCancelled(true);
+                     GriefPrevention.sendRateLimitedErrorMessage(player, failureReason.get());
+                 }
+             }
+         }
      }
  
      //when a player successfully joins the server...
@@ -1211,6 +1243,8 @@ import me.ryanhamshire.GriefPrevention.util.SchedulerUtil;
              return;
          }
 
+
+
          // If claims aren't enabled in this world, skip
          if (!instance.claimsEnabledForWorld(entity.getWorld())) {
              return;
@@ -1278,10 +1312,17 @@ import me.ryanhamshire.GriefPrevention.util.SchedulerUtil;
                  if (tameable.getOwner() != null)
                  {
                      UUID ownerID = tameable.getOwner().getUniqueId();
- 
-                     //if the player interacting is the owner or an admin in ignore claims mode, always allow
+
                      if (player.getUniqueId().equals(ownerID) || playerData.ignoreClaims)
                      {
+                         //if giving away pet, do that instead
+                         if (playerData.petGiveawayRecipient != null) {
+                             tameable.setOwner(playerData.petGiveawayRecipient);
+                             playerData.petGiveawayRecipient = null;
+                             GriefPrevention.sendMessage(player, TextMode.Success, Messages.PetGiveawayConfirmation);
+                             event.setCancelled(true);
+                         }
+
                          return;
                      }
                      if (!instance.pvpRulesApply(entity.getLocation().getWorld()) || instance.config_pvp_protectPets)
@@ -1404,8 +1445,9 @@ import me.ryanhamshire.GriefPrevention.util.SchedulerUtil;
                     }
                 }
             }
-        } 
- 
+        }
+
+
          // Name tags may only be used on entities that the player is allowed to kill.
          if (itemInHand.getType() == Material.NAME_TAG)
          {
@@ -1978,7 +2020,8 @@ import me.ryanhamshire.GriefPrevention.util.SchedulerUtil;
                                  clickedBlockType == Material.COMPARATOR ||
                                  clickedBlockType == Material.REDSTONE_WIRE ||
                                  Tag.FLOWER_POTS.isTagged(clickedBlockType) ||
-                                 Tag.CANDLES.isTagged(clickedBlockType)
+                                 Tag.CANDLES.isTagged(clickedBlockType) ||
+                                 Tag.COPPER_GOLEM_STATUES.isTagged(clickedBlockType)
                  ))
          {
              if (playerData == null) playerData = this.dataStore.getPlayerData(player.getUniqueId());

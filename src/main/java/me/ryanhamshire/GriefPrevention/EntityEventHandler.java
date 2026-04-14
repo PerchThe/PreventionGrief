@@ -103,6 +103,15 @@ public class EntityEventHandler implements Listener
     @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
     public void onEntityChangeBLock(EntityChangeBlockEvent event)
     {
+        // --- WEAVING POTION FIX START ---
+        // Allow Weaving potion effect to spawn cobwebs upon mob death,
+        // bypassing all standard GriefPrevention mob block-change rules.
+        if (event.getTo() == Material.COBWEB && event.getEntity() instanceof org.bukkit.entity.LivingEntity)
+        {
+            return;
+        }
+        // --- WEAVING POTION FIX END ---
+
         if (!GriefPrevention.instance.config_endermenMoveBlocks && event.getEntityType() == EntityType.ENDERMAN)
         {
             event.setCancelled(true);
@@ -318,7 +327,7 @@ public class EntityEventHandler implements Listener
             // Handle players leading packs of zombies.
             if (mob.getTarget() instanceof Player localPlayer)
                 player = localPlayer;
-            // Handle players leading burning leashed entities.
+                // Handle players leading burning leashed entities.
             else if (mob.isLeashed() && mob.getLeashHolder() instanceof Player localPlayer)
                 player = localPlayer;
         }
@@ -679,6 +688,14 @@ public class EntityEventHandler implements Listener
     @EventHandler(priority = EventPriority.LOWEST)
     public void onEntityPickup(EntityChangeBlockEvent event)
     {
+        // --- WEAVING POTION FIX START ---
+        // Prevents the Enderman anti-theft rule from accidentally blocking Weaving cobweb placements
+        if (event.getTo() == Material.COBWEB && event.getEntity() instanceof org.bukkit.entity.LivingEntity)
+        {
+            return;
+        }
+        // --- WEAVING POTION FIX END ---
+
         //FEATURE: endermen don't steal claimed blocks
 
         //if its an enderman

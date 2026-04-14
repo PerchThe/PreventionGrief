@@ -73,6 +73,10 @@ commands:
     usage: /<command> <player> <amount>
     permission: griefprevention.adjustclaimblocks
     aliases: acb
+  givepet:
+    description: Allows a player to give away a pet he or she tamed.
+    usage: /<command> <player>
+    permission: griefprevention.givepet
   adjustbonusclaimblocksall:
     description: Adds or subtracts bonus claim blocks for all online players.
     usage: /<command> <amount>
@@ -357,3 +361,6 @@ permissions:
   griefprevention.restorenatureaggressive:
     description: Grants permission to use /restorenatureaggressive and /restorenaturefill.
     default: op
+  griefprevention.givepet:
+    description: Grants permission to use /givepet.
+    default: true

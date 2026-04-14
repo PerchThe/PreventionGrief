@@ -117,6 +117,8 @@ public class PlayerData
     //timestamp for last "you're building outside your land claims" message
     Long buildWarningTimestamp = null;
 
+    OfflinePlayer petGiveawayRecipient = null;
+
     //timestamp for last warning when placing TNT on explosion protected claim
     Long explosivesWarningTimestamp = null;
 
