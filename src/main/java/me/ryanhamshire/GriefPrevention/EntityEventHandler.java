@@ -22,6 +22,9 @@ import com.griefprevention.protection.ProtectionHelper;
 import me.ryanhamshire.GriefPrevention.events.ProtectDeathDropsEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.ExplosionResult;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.entity.Hanging;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
@@ -710,26 +713,51 @@ public class EntityEventHandler implements Listener
         }
     }
 
-    //when a painting is broken
-    @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
+    public void onHangingPlace(HangingPlaceEvent event)
+    {
+        // Don't track in worlds where claims are not enabled
+        if (!GriefPrevention.instance.claimsEnabledForWorld(event.getBlock().getWorld())) return;
+
+        Player player = event.getPlayer();
+        if (player == null) return;
+
+        // If the player doesn't have build permission, don't allow the placement
+        Supplier<String> noBuildReason = ProtectionHelper.checkPermission(player, event.getEntity().getLocation(), ClaimPermission.Build, event);
+        if (noBuildReason != null)
+        {
+            event.setCancelled(true);
+            GriefPrevention.sendMessage(player, TextMode.Err, noBuildReason.get());
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
     public void onHangingBreak(HangingBreakEvent event)
     {
-        //don't track in worlds where claims are not enabled
+        // Don't track in worlds where claims are not enabled
         if (!GriefPrevention.instance.claimsEnabledForWorld(event.getEntity().getWorld())) return;
 
-        //Ignore cases where itemframes should break due to no supporting blocks
-        if (event.getCause() == RemoveCause.PHYSICS) return;
+        // THE PHYSICS BYPASS FIX (Protects against arrows/tridents causing block updates)
+        if (event.getCause() == RemoveCause.PHYSICS) {
+            Hanging hanging = (Hanging) event.getEntity();
+            Block attachedBlock = hanging.getLocation().getBlock().getRelative(hanging.getAttachedFace());
 
-        //FEATURE: claimed paintings are protected from breakage
+            // If the wall block is still there (not air), this physics update was
+            // caused by an intersecting entity like a stuck arrow. Cancel the break!
+            if (!attachedBlock.getType().isAir()) {
+                event.setCancelled(true);
+            }
+            return;
+        }
 
-        //explosions don't destroy hangings
+        // Explosions don't destroy hangings
         if (event.getCause() == RemoveCause.EXPLOSION)
         {
             event.setCancelled(true);
             return;
         }
 
-        //only allow players to break paintings, not anything else (like water and explosions)
+        // Only allow players to break paintings, not anything else (like water)
         if (!(event instanceof HangingBreakByEntityEvent))
         {
             event.setCancelled(true);
@@ -738,17 +766,17 @@ public class EntityEventHandler implements Listener
 
         HangingBreakByEntityEvent entityEvent = (HangingBreakByEntityEvent) event;
 
-        //who is removing it?
+        // Who is removing it?
         Entity remover = entityEvent.getRemover();
 
-        //again, making sure the breaker is a player
+        // Again, making sure the breaker is a player
         if (!(remover instanceof Player playerRemover))
         {
             event.setCancelled(true);
             return;
         }
 
-        //if the player doesn't have build permission, don't allow the breakage
+        // If the player doesn't have build permission, don't allow the breakage
         Supplier<String> noBuildReason = ProtectionHelper.checkPermission(playerRemover, event.getEntity().getLocation(), ClaimPermission.Build, event);
         if (noBuildReason != null)
         {
@@ -757,23 +785,63 @@ public class EntityEventHandler implements Listener
         }
     }
 
-    //when a painting is placed...
-    @EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
-    public void onPaintingPlace(HangingPlaceEvent event)
-    {
-        //don't track in worlds where claims are not enabled
-        if (!GriefPrevention.instance.claimsEnabledForWorld(event.getBlock().getWorld())) return;
-        if (event.getPlayer() == null) return;
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
+    public void onEntityDamage(EntityDamageByEntityEvent event) {
+        // Check if the entity being damaged is a Hanging entity (Painting, ItemFrame, LeashHitch)
+        if (event.getEntity() instanceof Hanging) {
 
-        //FEATURE: similar to above, placing a painting requires build permission in the claim
+            // Ensure claims are enabled in this world
+            if (!GriefPrevention.instance.claimsEnabledForWorld(event.getEntity().getWorld())) return;
 
-        //if the player doesn't have permission, don't allow the placement
-        Supplier<String> noBuildReason = ProtectionHelper.checkPermission(event.getPlayer(), event.getEntity().getLocation(), ClaimPermission.Build, event);
-        if (noBuildReason != null)
-        {
+            // Check if the damager is a player
+            if (event.getDamager() instanceof Player playerDamager) {
+
+                // Check if the player has build permission
+                Supplier<String> noBuildReason = ProtectionHelper.checkPermission(
+                        playerDamager,
+                        event.getEntity().getLocation(),
+                        ClaimPermission.Build,
+                        event
+                );
+
+                // If they don't have permission, cancel the damage event
+                if (noBuildReason != null) {
+                    event.setCancelled(true);
+                    GriefPrevention.sendMessage(playerDamager, TextMode.Err, noBuildReason.get());
+                }
+            } else if (event.getDamager() instanceof Projectile projectile) {
+                // OPTIONAL: Protect against arrows/tridents shot by players
+                if (projectile.getShooter() instanceof Player playerShooter) {
+                    Supplier<String> noBuildReason = ProtectionHelper.checkPermission(
+                            playerShooter,
+                            event.getEntity().getLocation(),
+                            ClaimPermission.Build,
+                            event
+                    );
+
+                    if (noBuildReason != null) {
+                        event.setCancelled(true);
+                        // Don't send a message here, it gets spammy with projectiles
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
+    public void onHangingExplosionDamage(EntityDamageEvent event) {
+        // Only care about Hanging entities (Item Frames, Paintings, Leash Hitches)
+        if (!(event.getEntity() instanceof Hanging)) return;
+
+        // Don't track in worlds where claims are not enabled
+        if (!GriefPrevention.instance.claimsEnabledForWorld(event.getEntity().getWorld())) return;
+
+        // If the damage is from ANY explosion (Creeper, TNT, End Crystal, Bed, etc.)
+        if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION ||
+                event.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
+
+            // Cancel the damage
             event.setCancelled(true);
-            GriefPrevention.sendMessage(event.getPlayer(), TextMode.Err, noBuildReason.get());
-            return;
         }
     }
 
