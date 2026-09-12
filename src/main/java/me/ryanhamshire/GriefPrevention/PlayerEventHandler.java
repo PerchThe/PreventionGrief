@@ -1817,6 +1817,7 @@ import me.ryanhamshire.GriefPrevention.util.SchedulerUtil;
                                  clickedBlockType == Material.CAVE_VINES ||
                                  clickedBlockType == Material.CAVE_VINES_PLANT ||
                                  clickedBlockType == Material.CHIPPED_ANVIL ||
+                                 clickedBlockType == Material.COMPOSTER ||
                                  clickedBlockType == Material.DAMAGED_ANVIL ||
                                  clickedBlockType == Material.GRINDSTONE ||
                                  clickedBlockType == Material.JUKEBOX ||
