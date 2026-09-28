@@ -172,6 +172,10 @@ public class PlayerData
             for (int i = 0; i < this.getClaims().size(); i++)
             {
                 Claim claim = this.getClaims().get(i);
+
+                // FIX: Skip sub-claims so they don't deduct from the player's balance
+                if (claim.parent != null) continue;
+
                 remainingBlocks = Math.subtractExact(remainingBlocks, claim.getArea());
             }
         }
@@ -295,7 +299,11 @@ public class PlayerData
                     {
                         dataStore.claimIDMap.put(child.getID(), child);
                     }
-                    totalClaimsArea += claim.getArea();
+
+                    // FIX: Only tally the area of top-level claims to prevent fake block injections
+                    if (claim.parent == null) {
+                        totalClaimsArea += claim.getArea();
+                    }
                 }
             }
 
