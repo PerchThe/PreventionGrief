@@ -4,6 +4,7 @@ import com.griefprevention.util.IntVector;
 import me.ryanhamshire.GriefPrevention.PlayerData;
 import me.ryanhamshire.GriefPrevention.util.BoundingBox;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -78,37 +79,89 @@ public abstract class BlockBoundaryVisualization extends BoundaryVisualization
         // North and south boundaries
         for (int x = Math.max(area.getMinX() + step, displayZone.getMinX()); x < area.getMaxX() - step / 2 && x < displayZone.getMaxX(); x += step)
         {
-            addDisplayed(displayZone, new IntVector(x, height, area.getMaxZ()), addSide);
-            addDisplayed(displayZone, new IntVector(x, height, area.getMinZ()), addSide);
+            addDisplayed(displayZone, new IntVector(x, getVisibleY(x, area.getMaxZ(), area), area.getMaxZ()), addSide);
+            addDisplayed(displayZone, new IntVector(x, getVisibleY(x, area.getMinZ(), area), area.getMinZ()), addSide);
         }
+
         // First and last step are always directly adjacent to corners
         if (area.getLength() > 2)
         {
-            addDisplayed(displayZone, new IntVector(area.getMinX() + 1, height, area.getMaxZ()), addSide);
-            addDisplayed(displayZone, new IntVector(area.getMinX() + 1, height, area.getMinZ()), addSide);
-            addDisplayed(displayZone, new IntVector(area.getMaxX() - 1, height, area.getMaxZ()), addSide);
-            addDisplayed(displayZone, new IntVector(area.getMaxX() - 1, height, area.getMinZ()), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMinX() + 1, getVisibleY(area.getMinX() + 1, area.getMaxZ(), area), area.getMaxZ()), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMinX() + 1, getVisibleY(area.getMinX() + 1, area.getMinZ(), area), area.getMinZ()), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMaxX() - 1, getVisibleY(area.getMaxX() - 1, area.getMaxZ(), area), area.getMaxZ()), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMaxX() - 1, getVisibleY(area.getMaxX() - 1, area.getMinZ(), area), area.getMinZ()), addSide);
         }
 
         // East and west boundaries
         for (int z = Math.max(area.getMinZ() + step, displayZone.getMinZ()); z < area.getMaxZ() - step / 2 && z < displayZone.getMaxZ(); z += step)
         {
-            addDisplayed(displayZone, new IntVector(area.getMinX(), height, z), addSide);
-            addDisplayed(displayZone, new IntVector(area.getMaxX(), height, z), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMinX(), getVisibleY(area.getMinX(), z, area), z), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMaxX(), getVisibleY(area.getMaxX(), z, area), z), addSide);
         }
+
         if (area.getWidth() > 2)
         {
-            addDisplayed(displayZone, new IntVector(area.getMinX(), height, area.getMinZ() + 1), addSide);
-            addDisplayed(displayZone, new IntVector(area.getMaxX(), height, area.getMinZ() + 1), addSide);
-            addDisplayed(displayZone, new IntVector(area.getMinX(), height, area.getMaxZ() - 1), addSide);
-            addDisplayed(displayZone, new IntVector(area.getMaxX(), height, area.getMaxZ() - 1), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMinX(), getVisibleY(area.getMinX(), area.getMinZ() + 1, area), area.getMinZ() + 1), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMaxX(), getVisibleY(area.getMaxX(), area.getMinZ() + 1, area), area.getMinZ() + 1), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMinX(), getVisibleY(area.getMinX(), area.getMaxZ() - 1, area), area.getMaxZ() - 1), addSide);
+            addDisplayed(displayZone, new IntVector(area.getMaxX(), getVisibleY(area.getMaxX(), area.getMaxZ() - 1, area), area.getMaxZ() - 1), addSide);
+        }
+
+        // Vertical pillars for 3D claims (draws up the corners)
+        if (boundary.type() == VisualizationType.SUBDIVISION_3D || boundary.type() == VisualizationType.CONFLICT_ZONE_3D)
+        {
+            int minY = Math.max(area.getMinY(), displayZone.getMinY());
+            int maxY = Math.min(area.getMaxY(), displayZone.getMaxY());
+
+            for (int y = minY; y <= maxY; y += step) {
+                addDisplayed(displayZone, new IntVector(area.getMinX(), y, area.getMinZ()), addCorner);
+                addDisplayed(displayZone, new IntVector(area.getMaxX(), y, area.getMinZ()), addCorner);
+                addDisplayed(displayZone, new IntVector(area.getMinX(), y, area.getMaxZ()), addCorner);
+                addDisplayed(displayZone, new IntVector(area.getMaxX(), y, area.getMaxZ()), addCorner);
+            }
         }
 
         // Add corners last to override any other elements created by very small claims.
-        addDisplayed(displayZone, new IntVector(area.getMinX(), height, area.getMaxZ()), addCorner);
-        addDisplayed(displayZone, new IntVector(area.getMaxX(), height, area.getMaxZ()), addCorner);
-        addDisplayed(displayZone, new IntVector(area.getMinX(), height, area.getMinZ()), addCorner);
-        addDisplayed(displayZone, new IntVector(area.getMaxX(), height, area.getMinZ()), addCorner);
+        addDisplayed(displayZone, new IntVector(area.getMinX(), getVisibleY(area.getMinX(), area.getMaxZ(), area), area.getMaxZ()), addCorner);
+        addDisplayed(displayZone, new IntVector(area.getMaxX(), getVisibleY(area.getMaxX(), area.getMaxZ(), area), area.getMaxZ()), addCorner);
+        addDisplayed(displayZone, new IntVector(area.getMinX(), getVisibleY(area.getMinX(), area.getMinZ(), area), area.getMinZ()), addCorner);
+        addDisplayed(displayZone, new IntVector(area.getMaxX(), getVisibleY(area.getMaxX(), area.getMinZ(), area), area.getMinZ()), addCorner);
+    }
+
+    /**
+     * Finds a visible Y coordinate near the target height that hugs the terrain contour.
+     */
+    protected int getVisibleY(int x, int z, @NotNull BoundingBox area)
+    {
+        // If the chunk isn't loaded, default back to the baseline height to avoid loading chunks
+        if (!new IntVector(x, height, z).isChunkLoaded(world)) {
+            return height;
+        }
+
+        int targetY = height;
+        Block block = world.getBlockAt(x, targetY, z);
+
+        // If starting in air, liquid, or passable blocks, scan downwards to find the solid floor
+        if (block.isEmpty() || block.isLiquid() || block.isPassable()) {
+            for (int y = targetY; y >= world.getMinHeight(); y--) {
+                if (world.getBlockAt(x, y, z).getType().isSolid()) {
+                    targetY = y;
+                    break;
+                }
+            }
+        }
+        // If starting inside a solid block, scan upwards to find an exposed surface
+        else {
+            for (int y = targetY; y < world.getMaxHeight() - 1; y++) {
+                if (!world.getBlockAt(x, y + 1, z).getType().isSolid()) {
+                    targetY = y;
+                    break;
+                }
+            }
+        }
+
+        // Clamp the final Y coordinate so it never renders outside the claim's vertical limits (crucial for 3D claims)
+        return Math.max(area.getMinY(), Math.min(area.getMaxY(), targetY));
     }
 
     /**

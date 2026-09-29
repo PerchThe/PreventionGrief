@@ -360,40 +360,37 @@ public abstract class DataStore {
     }
 
     synchronized public void changeClaimOwner(Claim claim, UUID newOwnerID) {
-        // if it's a subdivision, throw an exception
         if (claim.parent != null) {
             throw new NoTransferException(
                     "Subdivisions can't be transferred.  Only top-level claims may change owners.");
         }
 
-        // otherwise update information
-
-        // determine current claim owner
         PlayerData ownerData = null;
         if (!claim.isAdminClaim()) {
             ownerData = this.getPlayerData(claim.ownerID);
         }
 
-        // call event
         ClaimTransferEvent event = new ClaimTransferEvent(claim, newOwnerID);
         Bukkit.getPluginManager().callEvent(event);
 
-        // return if event is cancelled
         if (event.isCancelled())
             return;
 
-        // determine new owner
         PlayerData newOwnerData = null;
 
         if (event.getNewOwner() != null) {
             newOwnerData = this.getPlayerData(event.getNewOwner());
+
+            int claimCost = claim.getArea();
+
+            if (newOwnerData.getRemainingClaimBlocks() < claimCost) {
+                throw new NoTransferException("Transfer failed: The receiving player does not have enough claimblocks.");
+            }
         }
 
-        // transfer
         claim.ownerID = event.getNewOwner();
         this.saveClaim(claim);
 
-        // adjust blocks and other records
         if (ownerData != null) {
             ownerData.getClaims().remove(claim);
         }
@@ -403,13 +400,8 @@ public abstract class DataStore {
         }
     }
 
-    // adds a claim to the datastore, making it an effective claim
     synchronized void addClaim(Claim newClaim, boolean writeToStorage) {
-        // subdivisions are added under their parent, not directly to the hash map for
-        // direct search
         if (newClaim.parent != null) {
-            // Check by ID to prevent duplicates (object reference comparison is insufficient
-            // since the same subdivision may be loaded from multiple sources)
             boolean alreadyExists = false;
             if (newClaim.id != null) {
                 for (Claim child : newClaim.parent.children) {

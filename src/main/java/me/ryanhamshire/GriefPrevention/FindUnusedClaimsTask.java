@@ -49,15 +49,22 @@ class FindUnusedClaimsTask implements Runnable
         //don't do anything when there are no claims
         if (claimOwnerUUIDs.isEmpty()) return;
 
-        //wrap search around to beginning
-        if (!claimOwnerIterator.hasNext())
-        {
-            refreshUUIDs();
-            return;
-        }
+        // How many players to check every minute. Increase this to make it faster!
+        // Right now it's set to 25 per minute instead of the original 1 per minute.
+        int batchSize = 25;
 
-        // Run the pretask asynchronously to avoid blocking Folia region/global threads with disk I/O
-        SchedulerUtil.runAsyncNow(GriefPrevention.instance, new CleanupUnusedClaimPreTask(claimOwnerIterator.next()));
+        for (int i = 0; i < batchSize; i++)
+        {
+            //wrap search around to beginning if we run out of players mid-batch
+            if (!claimOwnerIterator.hasNext())
+            {
+                refreshUUIDs();
+                break;
+            }
+
+            // Run the pretask asynchronously to avoid blocking Folia region/global threads with disk I/O
+            SchedulerUtil.runAsyncNow(GriefPrevention.instance, new CleanupUnusedClaimPreTask(claimOwnerIterator.next()));
+        }
     }
 
     public void refreshUUIDs()
