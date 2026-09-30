@@ -2799,140 +2799,130 @@ public class GriefPrevention extends JavaPlugin {
         OfflinePlayer otherPlayer = null;
         UUID recipientID = null;
         if (recipientName.startsWith("[") && recipientName.endsWith("]")) {
+            // an explicit permission node in brackets, e.g. [group.helper]
             permission = recipientName.substring(1, recipientName.length() - 1);
-            if (permission == null || permission.isEmpty()) {
+            if (permission.isEmpty()) {
                 GriefPrevention.sendMessage(player, TextMode.Err, Messages.InvalidPermissionID);
                 return;
             }
+        } else if (recipientName.equals("public")) {
+            // grant to everyone
+            recipientName = "public";
         } else {
-            // validate player argument or group argument
-            if (!recipientName.startsWith("[") || !recipientName.endsWith("]")) {
-                otherPlayer = this.resolvePlayerByName(recipientName);
-                if (!clearPermissions && otherPlayer == null && !recipientName.equals("public")) {
-                    // bracket any permissions - at this point it must be a permission without
-                    // brackets
-                    if (recipientName.contains(".")) {
-                        recipientName = "[" + recipientName + "]";
-                    } else {
-                        GriefPrevention.sendMessage(player, TextMode.Err, Messages.PlayerNotFound2);
-                        return;
-                    }
-                }
-
-                // correct to proper casing
-                if (otherPlayer != null)
-                    recipientName = otherPlayer.getName();
-            } else {
-                // player does not exist and argument has a period so this is a permission
-                // instead
-                permission = recipientName;
-            }
-
+            // try to resolve as a player name first
+            otherPlayer = this.resolvePlayerByName(recipientName);
             if (otherPlayer != null) {
+                // correct to proper casing
                 recipientName = otherPlayer.getName();
                 recipientID = otherPlayer.getUniqueId();
-            } else {
-                recipientName = "public";
-            }
-
-            List<Claim> targetClaims = new ArrayList<>();
-            if (claim == null) {
-                PlayerData playerData = this.dataStore.getPlayerData(player.getUniqueId());
-                targetClaims.addAll(playerData.getClaims());
-            } else {
-                // Check permission on the claim where trust will be applied
-                if (claim.checkPermission(player, ClaimPermission.Manage, null) != null) {
-                    GriefPrevention.sendMessage(player, TextMode.Err, Messages.NoPermissionTrust, claim.getOwnerName());
-                    return;
-                }
-                targetClaims.add(claim);
-            }
-
-            // see if the player has the level of permission he's trying to grant
-            Supplier<String> errorMessage = null;
-
-            // Only check permissions if we have a specific claim (not applying to all
-            // claims)
-            if (claim != null) {
-                // permission level null indicates granting permission trust
-                if (permissionLevel == null) {
-                    Supplier<String> permissionCheck = claim.checkPermission(player, ClaimPermission.Edit, null);
-                    if (permissionCheck != null) {
-                        errorMessage = () -> "Only " + claim.getOwnerName() + " can grant /PermissionTrust here.";
-                    } else {
-                        errorMessage = null;
-                    }
-                }
-                // otherwise just use the ClaimPermission enum values
-                else {
-                    errorMessage = claim.checkPermission(player, ClaimPermission.Manage, null);
-                }
-            }
-
-            // error message for trying to grant a permission the player doesn't have
-            if (errorMessage != null) {
-                GriefPrevention.sendMessage(player, TextMode.Err, Messages.CantGrantThatPermission);
+            } else if (!clearPermissions && recipientName.contains(".")) {
+                // not a known player, but looks like a permission node (e.g. group.helper)
+                permission = recipientName;
+            } else if (!clearPermissions) {
+                GriefPrevention.sendMessage(player, TextMode.Err, Messages.PlayerNotFound2);
                 return;
             }
-
-            String identifierToAdd = recipientName;
-            if (permission != null) {
-                identifierToAdd = "[" + permission + "]";
-                // replace recipientName as well so the success message clearly signals a
-                // permission
-                recipientName = identifierToAdd;
-            } else if (recipientID != null) {
-                identifierToAdd = recipientID.toString();
-            }
-
-            // calling the event
-            TrustChangedEvent event = new TrustChangedEvent(player, targetClaims, permissionLevel, true,
-                    identifierToAdd);
-            Bukkit.getPluginManager().callEvent(event);
-
-            if (event.isCancelled()) {
-                return;
-            }
-
-            // apply changes
-            for (Claim currentClaim : event.getClaims()) {
-                if (permissionLevel == null) {
-                    if (!currentClaim.managers.contains(identifierToAdd)) {
-                        currentClaim.managers.add(identifierToAdd);
-                    }
-                } else {
-                    currentClaim.setPermission(identifierToAdd, permissionLevel);
-                }
-                this.dataStore.saveClaim(currentClaim);
-
-                // Propagate trust changes to child claims that inherit permissions
-                propagateTrustToChildren(currentClaim, identifierToAdd, permissionLevel, true);
-            }
-
-            // notify player
-            if (recipientName.equals("public"))
-                recipientName = this.dataStore.getMessage(Messages.CollectivePublic);
-            String permissionDescription;
-            if (permissionLevel == null) {
-                permissionDescription = this.dataStore.getMessage(Messages.PermissionsPermission);
-            } else if (permissionLevel == ClaimPermission.Build) {
-                permissionDescription = this.dataStore.getMessage(Messages.BuildPermission);
-            } else if (permissionLevel == ClaimPermission.Access) {
-                permissionDescription = this.dataStore.getMessage(Messages.AccessPermission);
-            } else // ClaimPermission.Inventory
-            {
-                permissionDescription = this.dataStore.getMessage(Messages.ContainersPermission);
-            }
-
-            String location; // Declare variable in outer scope
-            if (claim == null) {
-                location = this.dataStore.getMessage(Messages.LocationAllClaims);
-            } else {
-                location = this.dataStore.getMessage(Messages.LocationCurrentClaim);
-            }
-            GriefPrevention.sendMessage(player, TextMode.Success, Messages.GrantPermissionConfirmation, recipientName,
-                    permissionDescription, location);
         }
+
+        // The remaining logic applies the trust and is shared by every recipient type
+        // (player, public, or permission/group node).
+        List<Claim> targetClaims = new ArrayList<>();
+        if (claim == null) {
+            PlayerData playerData = this.dataStore.getPlayerData(player.getUniqueId());
+            targetClaims.addAll(playerData.getClaims());
+        } else {
+            // Check permission on the claim where trust will be applied
+            if (claim.checkPermission(player, ClaimPermission.Manage, null) != null) {
+                GriefPrevention.sendMessage(player, TextMode.Err, Messages.NoPermissionTrust, claim.getOwnerName());
+                return;
+            }
+            targetClaims.add(claim);
+        }
+
+        // see if the player has the level of permission he's trying to grant
+        Supplier<String> errorMessage = null;
+
+        // Only check permissions if we have a specific claim (not applying to all
+        // claims)
+        if (claim != null) {
+            // permission level null indicates granting permission trust
+            if (permissionLevel == null) {
+                Supplier<String> permissionCheck = claim.checkPermission(player, ClaimPermission.Edit, null);
+                if (permissionCheck != null) {
+                    errorMessage = () -> "Only " + claim.getOwnerName() + " can grant /PermissionTrust here.";
+                } else {
+                    errorMessage = null;
+                }
+            }
+            // otherwise just use the ClaimPermission enum values
+            else {
+                errorMessage = claim.checkPermission(player, ClaimPermission.Manage, null);
+            }
+        }
+
+        // error message for trying to grant a permission the player doesn't have
+        if (errorMessage != null) {
+            GriefPrevention.sendMessage(player, TextMode.Err, Messages.CantGrantThatPermission);
+            return;
+        }
+
+        String identifierToAdd = recipientName;
+        if (permission != null) {
+            identifierToAdd = "[" + permission + "]";
+            // replace recipientName as well so the success message clearly signals a
+            // permission
+            recipientName = identifierToAdd;
+        } else if (recipientID != null) {
+            identifierToAdd = recipientID.toString();
+        }
+
+        // calling the event
+        TrustChangedEvent event = new TrustChangedEvent(player, targetClaims, permissionLevel, true,
+                identifierToAdd);
+        Bukkit.getPluginManager().callEvent(event);
+
+        if (event.isCancelled()) {
+            return;
+        }
+
+        // apply changes
+        for (Claim currentClaim : event.getClaims()) {
+            if (permissionLevel == null) {
+                if (!currentClaim.managers.contains(identifierToAdd)) {
+                    currentClaim.managers.add(identifierToAdd);
+                }
+            } else {
+                currentClaim.setPermission(identifierToAdd, permissionLevel);
+            }
+            this.dataStore.saveClaim(currentClaim);
+
+            // Propagate trust changes to child claims that inherit permissions
+            propagateTrustToChildren(currentClaim, identifierToAdd, permissionLevel, true);
+        }
+
+        // notify player
+        if (recipientName.equals("public"))
+            recipientName = this.dataStore.getMessage(Messages.CollectivePublic);
+        String permissionDescription;
+        if (permissionLevel == null) {
+            permissionDescription = this.dataStore.getMessage(Messages.PermissionsPermission);
+        } else if (permissionLevel == ClaimPermission.Build) {
+            permissionDescription = this.dataStore.getMessage(Messages.BuildPermission);
+        } else if (permissionLevel == ClaimPermission.Access) {
+            permissionDescription = this.dataStore.getMessage(Messages.AccessPermission);
+        } else // ClaimPermission.Inventory
+        {
+            permissionDescription = this.dataStore.getMessage(Messages.ContainersPermission);
+        }
+
+        String location; // Declare variable in outer scope
+        if (claim == null) {
+            location = this.dataStore.getMessage(Messages.LocationAllClaims);
+        } else {
+            location = this.dataStore.getMessage(Messages.LocationCurrentClaim);
+        }
+        GriefPrevention.sendMessage(player, TextMode.Success, Messages.GrantPermissionConfirmation, recipientName,
+                permissionDescription, location);
     }
 
     // helper method to resolve a player by name
